@@ -10,6 +10,11 @@ The project emphasizes not only AI-based information extraction but also operati
 **Status:** Active development and testing  
 **Primary goal:** Build a configurable foundation for processing, qualifying, and routing business leads reliably.
 
+## Workflow Overview
+
+The following screenshot shows the CENDARA Lead Intelligence Worker in n8n, including its lead-processing, qualification, event-tracking, and notification-handling paths.
+
+![CENDARA Lead Intelligence Worker workflow overview](cendara-workflow-overview.png)
 ## The Problem
 
 Business enquiries often arrive as unstructured messages containing incomplete information about a customer's needs, budget, urgency, and requested service.
