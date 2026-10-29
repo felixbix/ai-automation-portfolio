@@ -158,7 +158,11 @@ No production customer deployment or measured business outcome is claimed.
 - Bounded retries and recovery workflows
 - Operational metrics and auditability
 - Debugging, testing, and technical documentation
+- 
+## Technical Documentation
 
+- [Workflow Architecture Diagram](architecture.md) — visual overview of lead processing and notification recovery.
+- [Technical Architecture and Testing Notes](technical-notes.md) — implementation details, debugging outcomes, reliability controls, and remaining test priorities.
 ## Summary
 
 CENDARA explores a practical approach to AI-assisted lead management: extract useful information with AI, apply explicit rules to business decisions, persist operational state, and design recovery paths for failures.
