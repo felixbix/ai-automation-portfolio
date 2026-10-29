@@ -116,6 +116,7 @@ The project has no real hotel partner and does not claim live hotel inventory, l
 ## Technical Documentation
 
 - [Hotel Operations Architecture](architecture.md) — diagrams of the planned guest interaction and reservation workflows, plus the database foundation and reliability principles.
+- - [PostgreSQL Schema Design](schema-design.md) — documents the database structure, inventory and reservation modeling, data integrity principles, and current implementation status.
 
 ## Summary
 
