@@ -8,21 +8,29 @@ I build practical AI-powered automation systems that connect workflows, APIs, la
 
 ## Featured Projects
 
-### ATLAS — AI Travel Agent
-A conversational travel-planning prototype that collects trip requirements, preserves request state, and drafts a preliminary itinerary.
+### [ATLAS — AI Travel Agent](projects/atlas/README.md)
 
-**Status:** Prototype in progress. Tested using sample travel data and Google Sheets persistence. Live travel-provider integrations and real bookings are not implemented.
+A conversational travel-planning prototype using n8n, Gemini, Telegram, and Google Sheets.
 
-### VELORA — AI Hotel Operations
-A hotel-operations concept for a fictional Dubai property, designed around guest workflows and PostgreSQL-backed operational data.
+**Focus:** AI-assisted planning, structured data extraction, conversation state, and input validation.
 
-**Status:** PostgreSQL schema and architecture foundation created and checked in Neon. Full end-to-end reservation and guest-service workflows remain in development.
+**Status:** Prototype in development.
 
-### CENDARA — AI Lead Intelligence & Business Automation
-An n8n and PostgreSQL lead-processing workflow covering event intake, lead qualification, urgent admin notifications, notification retries, and operational metrics.
+### [VELORA — AI Hotel Operations](projects/velora/README.md)
 
-**Status:** Core paths have been exercised. Event lifecycle tracking and a no-match qualification fallback have been improved. Some historical recovery and additional failure-path testing remain ongoing.
+A hotel-operations project exploring PostgreSQL-backed data management and reliable guest-service workflows.
 
+**Focus:** Database design, data integrity, reservation logic, and controlled automation.
+
+**Status:** Database foundation established; end-to-end workflows in development.
+
+### [CENDARA — AI Lead Intelligence](projects/cendara/README.md)
+
+An AI-assisted lead-processing system combining structured extraction, qualification rules, notification delivery tracking, and recovery workflows.
+
+**Focus:** Lead intelligence, PostgreSQL, event lifecycle tracking, bounded retries, and monitoring.
+
+**Status:** Active development and testing.
 ## My Engineering Approach
 
 1. Start with the business problem and define expected behavior.
