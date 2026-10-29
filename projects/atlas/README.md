@@ -80,6 +80,7 @@ ATLAS is a prototype, not a live travel-booking service.
 ## Technical Documentation
 
 - [Travel Planning Workflow Architecture](architecture.md) — visual overview of Telegram intake, trip-detail extraction, progressive information collection, and itinerary drafting.
+- - [Technical Architecture and Testing Notes](technical-notes.md) — implementation details, selected test results, engineering decisions, known limitations, and future improvements.
 ## Summary
 
 ATLAS demonstrates how AI and deterministic workflow logic can work together to turn an incomplete conversational request into a structured travel-planning workflow. Its focus is on collecting reliable inputs, tracking progress, and producing a useful draft without misrepresenting recommendations as confirmed bookings.
