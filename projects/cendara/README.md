@@ -14,7 +14,7 @@ The project emphasizes not only AI-based information extraction but also operati
 
 This screenshot shows the CENDARA Lead Intelligence Worker in n8n, illustrating the workflow structure and connections between its processing stages.
 
-![CENDARA workflow overview](YOUR-EXACT-FILENAME.png)
+![CENDARA workflow overview](Screenshot%202026-10-30%20003507.png)
 
 ## The Problem
 
