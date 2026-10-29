@@ -12,9 +12,10 @@ The project emphasizes not only AI-based information extraction but also operati
 
 ## Workflow Overview
 
-The following screenshot shows the CENDARA Lead Intelligence Worker in n8n, including its lead-processing, qualification, event-tracking, and notification-handling paths.
+This screenshot shows the CENDARA Lead Intelligence Worker in n8n, illustrating the workflow structure and connections between its processing stages.
 
-![CENDARA Lead Intelligence Worker workflow overview](cendara-workflow-overview.png)
+![CENDARA workflow overview](YOUR-EXACT-FILENAME.png)
+
 ## The Problem
 
 Business enquiries often arrive as unstructured messages containing incomplete information about a customer's needs, budget, urgency, and requested service.
