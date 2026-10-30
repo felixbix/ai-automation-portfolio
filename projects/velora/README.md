@@ -10,6 +10,12 @@ The project uses n8n and PostgreSQL to explore reliable guest-service workflows,
 **Status:** In development  
 **Primary goal:** Design a reliable foundation for hotel workflows, with data integrity and controlled automation at the center.
 
+## Database Structure Overview
+
+This screenshot shows the VELORA PostgreSQL database structure in Neon, including the tables designed to support hotel inventory, guest records, reservations, service requests, and operational tracking.
+
+![VELORA database overview](Screenshot%202026-10-30%20012936.png)
+
 ## The Problem
 
 Hotel operations involve connected information about guests, rooms, availability, reservations, policies, and service requests. If these records are inconsistent, automated responses may provide incorrect information or create operational problems.
