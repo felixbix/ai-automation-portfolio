@@ -8,6 +8,12 @@ ATLAS is a conversational travel-planning prototype built with n8n, Gemini, Tele
 **Status:** In development  
 **Primary goal:** Demonstrate conversational workflow orchestration, structured data handling, and AI-assisted planning.
 
+## Workflow Overview
+
+This screenshot shows the ATLAS travel-planning workflow in n8n, including its main processing stages and connections.
+
+![ATLAS workflow overview](Screenshot%202026-10-30%20010713.png)
+
 ## The Problem
 
 Travel-planning requests often arrive as incomplete messages. Before useful recommendations can be prepared, important details such as destination, travel dates, number of travelers, and budget must be collected and organized.
