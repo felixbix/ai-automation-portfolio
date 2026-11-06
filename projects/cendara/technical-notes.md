@@ -2,154 +2,384 @@
 
 ## 1. Purpose
 
-CENDARA explores how AI-assisted information extraction, deterministic qualification rules, and database-backed workflow state can work together in a lead-management system.
+CENDARA explores how AI-assisted information extraction, deterministic qualification rules, and database-backed workflow state can work together in a configurable lead-management system.
 
-The project is built with n8n, PostgreSQL hosted on Neon, Gemini, and Telegram integrations.
+The project is built with n8n, PostgreSQL hosted on Neon, Google Gemini, JavaScript, and Telegram integrations.
 
-These notes document the workflow design, selected tested behaviors, and known limitations. They do not claim that every failure scenario has been tested or that the system is production-ready.
+Its engineering focus extends beyond AI-assisted lead processing to include event lifecycle management, duplicate prevention, database integrity, notification delivery, failure logging, and controlled recovery.
+
+These notes document the system architecture, implemented controls, selected test outcomes, and known limitations. They do not claim that every failure scenario has been tested or that the system is production-ready.
+
+**Project status:** Active development and testing.
+
+---
 
 ## 2. High-Level Architecture
 
-The main processing path follows this sequence:
+CENDARA separates incoming-event acknowledgement from the more involved lead-intelligence process.
 
-1. Receive and normalize an incoming event.
-2. Validate the event and required input fields.
-3. Track event processing in PostgreSQL.
-4. Create or retrieve the corresponding lead.
-5. Extract structured information from the enquiry using an LLM.
-6. Evaluate the extracted information against deterministic qualification rules.
-7. Save the qualification outcome.
-8. Update the event lifecycle status.
-9. Create and deliver notifications when the configured workflow requires them.
-10. Record delivery outcomes and monitor failures that exhaust their retry allowance.
+The general processing sequence is:
 
-## 3. Workflow Responsibilities
+1. Receive an incoming Telegram event.
+2. Normalize and validate the message.
+3. Verify the organization's channel integration.
+4. Register the incoming event and identify duplicates.
+5. Send a fast acknowledgement.
+6. Construct a clean payload for the lead-processing worker.
+7. Extract structured information using Gemini.
+8. Evaluate the extracted information against configured qualification rules.
+9. Persist the lead and qualification results.
+10. Update event-processing state.
+11. Create administrative notifications when configured conditions are met.
+12. Track notification outcomes and handle eligible failures.
 
-### Event Intake and Validation
+This separation allows the intake path to acknowledge a message without waiting for the entire AI-processing workflow to finish.
 
-Incoming messages are normalized into a consistent structure with event identifiers and message content.
+---
 
-Validation prevents empty or unusable inputs from continuing through the normal lead-processing path.
+## 3. Technology Stack
 
-### Event Lifecycle Management
+| Technology | Responsibility |
+|---|---|
+| n8n | Workflow orchestration, branching, integrations and recovery |
+| PostgreSQL | Persistent records, event state and database safeguards |
+| Neon | Hosted PostgreSQL development environment |
+| Google Gemini | AI-assisted information extraction and classification |
+| JavaScript | Normalization, transformation and workflow logic |
+| Telegram | Enquiry intake and administrative notifications |
+| SQL | Database queries, constraints, state transitions and reporting |
 
-The PostgreSQL event record tracks processing status. The workflow includes explicit processing and completion updates for the paths tested.
+---
 
-Stable event identifiers and database-backed safeguards are used to reduce duplicate processing. This design still requires testing under concurrent execution and additional retry scenarios.
+## 4. Database Architecture
 
-### AI-Assisted Lead Intelligence
+CENDARA uses PostgreSQL as its persistent source of truth.
 
-Gemini supports structured extraction from natural-language enquiries.
+The database is designed around organization-level ownership, allowing business configuration and operational records to be associated with the relevant organization.
 
-The fields include customer intent, urgency, budget information when available, requested service, a concise summary, and information that may still be missing.
+The schema includes the following tables:
 
-Extracted fields provide context for qualification; they are not automatically treated as verified business facts.
+| Table | Responsibility |
+|---|---|
+| `organizations` | Organization records |
+| `organization_settings` | Organization-level configuration |
+| `channel_integrations` | Registered communication integrations |
+| `processed_events` | Incoming-event identity and processing state |
+| `contacts` | Contact information |
+| `conversations` | Conversation records |
+| `leads` | Structured lead information and qualification outcomes |
+| `ai_processing_runs` | AI-processing records |
+| `qualification_rules` | Configurable lead qualification rules |
+| `routing_rules` | Organization-specific routing configuration |
+| `follow_up_tasks` | Follow-up task records |
+| `notification_deliveries` | Administrative notification delivery state |
 
-### Deterministic Qualification
+### Organization-Level Data Integrity
 
-A separate qualification layer evaluates extracted information using configured business rules.
+Organization identifiers are used to scope relevant records and relationships.
 
-Examples of rule outcomes include:
+Database constraints provide additional safeguards against invalid relationships and duplicate lead records.
 
-- Urgent enquiries can be routed for human review.
-- Enquiries matching a configured high-intent and budget rule can qualify for a higher-priority outcome.
-- Enquiries matching a configured low-intent rule can be marked unqualified.
-- If no configured rule matches, the fallback routes the lead to human review instead of automatically rejecting it.
+One implemented safeguard uses:
 
-### Notification Delivery and Recovery
+- `leads.processed_event_id` as a UUID reference.
+- `idx_leads_org_processed_event_unique` as a unique organization-scoped index.
+- `leads_processed_event_same_org_fk` to enforce the relationship between a lead and its processed event within the same organization.
 
-Notification delivery is tracked separately from lead qualification and event processing.
+These controls help prevent the same processed event from creating multiple lead records within the same organization.
 
-The workflow records delivery state, handles successful and failed delivery paths, and supports a bounded retry process with a maximum of three attempts.
+They complement application-level duplicate checks rather than replacing them.
 
-Monitoring is intended to identify failed notifications that exhaust the retry allowance and require attention.
+---
 
-## 4. Selected Testing and Debugging Outcomes
+## 5. Workflow Responsibilities
 
-### Qualification Fallback
+### 5.1 Event Intake and Validation
 
-**Issue:** An unmatched qualification rule could leave a lead in a generic pending state without an explicit review route.
+The intake workflow normalizes incoming Telegram messages into a consistent structure.
 
-**Change:** The fallback was updated to use `needs_review`, with the reason that no configured rule matched and human review is required.
+It extracts relevant identifiers and message content, validates required fields, and checks whether the organization has an active channel integration.
 
-**Outcome:** The revised fallback was exercised against existing test records. This confirms the selected behavior, not exhaustive qualification coverage.
+The workflow separates valid incoming events from unusable inputs so that invalid messages do not proceed through normal processing.
 
-### Event Lifecycle Tracking
+### 5.2 Event Registration and Idempotency
 
-**Issue:** Earlier records did not consistently contain processing timestamps, making it difficult to distinguish normal processing from historical records.
+Incoming events are registered in PostgreSQL using their relevant organization, source-channel and external-event identifiers.
 
-**Change:** Explicit workflow steps were added to mark processing and completion, with timestamps recorded during the corresponding execution paths.
+The workflow checks whether an incoming event has already been registered before launching the lead-processing path.
 
-**Outcome:** New processing paths were tested for status and timestamp updates. Some historical records were reconciled using available evidence; missing historical timestamps were not fabricated.
+A previously registered event is identified as an existing event rather than being treated as a new one.
 
-### Notification State Consistency
+Database-backed safeguards provide another level of protection against duplicate lead creation.
 
-**Issue:** A notification success-handling path was using an update that marked the delivery as failed rather than sent.
+The implementation follows an idempotency-oriented design: repeated processing attempts should not produce unintended duplicate lead records for the same organization and processed event.
 
-**Change:** The success path was corrected to mark a pending notification as `sent`, while the failure path records `failed` and an error message when available.
+This does not establish guaranteed exactly-once execution across every possible failure or concurrency scenario.
 
-**Outcome:** The corrected delivery-state handling was tested, including a notification successfully delivered on the third retry attempt.
+### 5.3 Fast Acknowledgement
 
-### Bounded Recovery
+After successful intake validation and event registration, the workflow sends an acknowledgement to the sender.
 
-**Design:** Eligible failed notifications can be retried up to three times. Exhausted failures are intended to be visible to the monitoring workflow.
+The acknowledgement is separated from the more involved AI-processing worker.
 
-**Remaining work:** Broader tests are needed for repeated failures, concurrent execution, retry eligibility, and monitoring accuracy.
+This design reduces the dependency between the initial response and slower downstream processing.
 
-## 5. Reliability Controls
+### 5.4 Lead Intelligence Worker
 
-The project incorporates several reliability concepts:
+The lead-intelligence worker receives a normalized payload rather than relying on the original Telegram event structure.
 
-- Input validation before normal processing
-- Persistent event and lead records
-- Event identifiers for duplicate-prevention controls
-- Explicit qualification rules and a human-review fallback
-- Separate notification delivery state
-- Bounded notification retries
-- Monitoring and operational metrics
-- Database records to support debugging and reconciliation
+The worker validates the supplied data before proceeding with extraction and qualification.
 
-These controls reduce specific risks but do not establish guaranteed exactly-once execution or eliminate all possible failures.
+This creates a clearer boundary between message intake and downstream business processing.
 
-## 6. Operational Metrics
+### 5.5 AI-Assisted Information Extraction
 
-The dashboard-oriented workflow aggregates information about:
+Gemini interprets natural-language enquiries and extracts structured information.
 
-- Total leads and qualification outcomes
-- Event processing statuses
+The extraction fields include:
+
+- `urgency`
+- `intent_level`
+- `budget_provided`
+- `budget_amount`
+- `service_requested`
+- `need_summary`
+- `timeline`
+- `missing_information`
+
+The extracted fields provide structured context for subsequent business logic.
+
+AI-generated information is treated as extracted input, not automatically as verified business fact.
+
+### 5.6 Deterministic Qualification
+
+The qualification layer evaluates extracted information against organization-specific rules.
+
+This keeps language interpretation separate from business decisions.
+
+The demonstrated rule configuration includes:
+
+- An urgent-enquiry rule that routes the lead for human review.
+- A high-intent and budget-based rule that can produce a qualified outcome with higher priority.
+- A low-intent rule for identifying enquiries that meet configured unqualified criteria.
+- A fallback for enquiries that do not match an active rule.
+
+The unmatched-rule fallback uses `needs_review` rather than automatically rejecting the enquiry.
+
+Qualification results are persisted with the lead record, including qualification status, score, priority and supporting qualification data.
+
+---
+
+## 6. Event Lifecycle Management
+
+CENDARA maintains persistent event-processing state in PostgreSQL.
+
+The event lifecycle includes states such as:
+
+- `received`
+- `processing`
+- `completed`
+- `retryable`
+
+The relevant workflow steps record processing transitions and timestamps.
+
+Error information is also retained where applicable to support investigation and recovery.
+
+Explicit state transitions help distinguish newly received events, active processing, completed work and events that may require another processing attempt.
+
+New processing paths have been tested for status and timestamp updates.
+
+Historical records are treated separately from normal processing. Reconciliation is performed only where supporting evidence exists; missing historical timestamps or execution histories are not fabricated.
+
+---
+
+## 7. Notification Delivery and Recovery
+
+Notification delivery is tracked independently of lead qualification and event-processing status.
+
+The `notification_deliveries` table records relevant information such as:
+
+- Organization identifier
+- Related processed event
+- Notification type
+- Destination
+- Delivery status
+- Attempt count
+- Last error
+- Additional notification details
+- Relevant timestamps
+
+The notification workflow supports:
+
+1. Creating a notification delivery record.
+2. Attempting Telegram delivery.
+3. Recording successful delivery.
+4. Recording failed delivery and available error information.
+5. Retrying eligible failed notifications.
+6. Identifying notifications that have exhausted the retry allowance.
+7. Recording administrative failure reports where applicable.
+
+### Bounded Retry Policy
+
+The implemented retry design uses a maximum of three delivery attempts.
+
+Exhausted notifications are identified for operational attention rather than being retried indefinitely.
+
+The distinction between notification state and lead-processing state is important: a lead can be processed successfully even when its administrative notification has not been delivered.
+
+---
+
+## 8. Operational Monitoring
+
+CENDARA includes database-backed operational records and dashboard-oriented metrics workflows.
+
+The monitoring design considers:
+
+- Total lead records
+- Qualification outcomes
+- Event-processing statuses
 - Notification delivery statuses
-- Retry eligibility and exhausted failures
+- Failed and exhausted notification attempts
 - Audit activity
 
-Metrics should be checked against the underlying database records before they are used for operational reporting.
+The underlying database records remain the reference point for validating reported metrics.
 
-## 7. Known Limitations
+Further testing is required to confirm that all dashboard metrics remain accurate across different event and recovery scenarios.
 
-CENDARA is an active portfolio project.
+---
 
-- Testing covers selected workflow paths, not every possible scenario.
-- Qualification quality depends on AI extraction and rule configuration.
-- Historical records may require additional evidence-based review.
-- Concurrent event handling and broader failure recovery need further validation.
-- No production customer deployment or measured business impact is claimed.
+## 9. Selected Testing and Debugging Outcomes
 
-## 8. Next Testing Priorities
+Development has involved testing individual workflow stages, examining database records, identifying inconsistencies and correcting the affected logic.
 
-1. Test invalid, empty, ambiguous, and incomplete inputs.
-2. Test every configured qualification rule and the unmatched-rule fallback.
-3. Verify duplicate-event behavior during retries and concurrent execution.
-4. Test notification success, failure, retry exhaustion, and monitoring.
-5. Compare dashboard metrics with SQL queries against the source tables.
-6. Record reproducible test cases and expected versus actual results.
+### 9.1 Duplicate-Event Detection
 
-## 9. Security
+**Purpose:** Confirm that a previously registered external event is not treated as a new event.
 
-Before publishing workflow exports, SQL files, or screenshots, remove credentials, API keys, Telegram bot tokens, database connection strings, private chat identifiers, and personal customer data.
+**Test result:** A repeated event was identified with `is_new_event = false`.
 
-Only publish sanitized examples and synthetic test data.
+**Significance:** The duplicate-checking path correctly identified the event as already registered in the tested scenario.
+
+### 9.2 Lead Creation and Duplicate Prevention
+
+**Purpose:** Verify that a valid worker payload can create a lead and that duplicate-lead safeguards are enforced.
+
+**Test result:** Lead creation and the organization-scoped processed-event uniqueness safeguard were tested.
+
+**Significance:** The database provides additional protection against duplicate lead records associated with the same processed event.
+
+### 9.3 Qualification Fallback
+
+**Issue:** An enquiry that did not match a configured qualification rule could remain in a generic pending state without an explicit review outcome.
+
+**Change:** The fallback was updated to use `needs_review`.
+
+**Test result:** The revised fallback was exercised against test records.
+
+**Significance:** Unmatched enquiries can be distinguished from enquiries that were explicitly qualified or rejected.
+
+### 9.4 Event Lifecycle Tracking
+
+**Issue:** Earlier event records did not consistently contain processing timestamps.
+
+**Change:** Explicit workflow steps were implemented to record processing and completion transitions.
+
+**Test result:** New processing paths were checked for the relevant status and timestamp updates.
+
+**Historical handling:** Selected historical records were reconciled using available evidence. Missing historical execution details were not invented.
+
+### 9.5 Notification State Consistency
+
+**Issue:** A notification success-handling path contained an incorrect status update that marked a successful notification as failed.
+
+**Change:** The success path was corrected to record `sent`, while the failure path records `failed` and available error information.
+
+**Test result:** Notification delivery-state handling was tested, including a successful delivery on a later permitted attempt.
+
+**Significance:** Notification records now distinguish successful delivery from failed delivery in the tested paths.
+
+### 9.6 Failure Logging and Recovery Monitoring
+
+**Purpose:** Verify that failed administrative notification attempts are recorded and can be identified for operational attention.
+
+**Test result:** Failure logging paths and exhausted-notification monitoring were exercised.
+
+**Significance:** Failed notification attempts can be investigated using their persistent delivery records instead of relying only on workflow execution history.
+
+---
+
+## 10. Reliability Controls
+
+The system incorporates the following reliability concepts:
+
+| Control | Purpose |
+|---|---|
+| Input validation | Prevent invalid input from entering normal processing |
+| Persistent event records | Maintain event identity and processing state |
+| Duplicate-event detection | Identify previously registered events |
+| Database uniqueness constraints | Reduce duplicate lead creation |
+| Organization-scoped relationships | Protect tenant-level data integrity |
+| Deterministic qualification rules | Make business decisions consistent and explainable |
+| Human-review fallback | Avoid automatically rejecting unmatched cases |
+| Separate notification records | Distinguish lead processing from message delivery |
+| Bounded retries | Prevent unlimited notification attempts |
+| Failure logging | Support investigation and recovery |
+| Operational metrics | Improve visibility into system behaviour |
+
+These controls reduce specific risks but do not eliminate every possible failure.
+
+In particular, concurrent execution, external service outages and complex recovery scenarios require further testing.
+
+---
+
+## 11. Known Limitations
+
+CENDARA remains an active portfolio project.
+
+- Qualification quality depends on extraction accuracy and rule configuration.
+- Testing covers selected workflow paths rather than every possible scenario.
+- Concurrent event processing requires further validation.
+- Broader failure-recovery scenarios need additional testing.
+- Some historical records may require evidence-based review.
+- Dashboard metrics require continued comparison against underlying database records.
+- Industry-specific configuration and additional channel integrations remain development areas.
+- Production deployment, customer usage and measured business impact have not been established.
+
+---
+
+## 12. Next Testing Priorities
+
+1. Test empty, invalid, incomplete and ambiguous incoming messages.
+2. Verify every configured qualification rule and the unmatched-rule fallback.
+3. Test duplicate-event handling during retries and concurrent executions.
+4. Test notification success, failure, retry limits and exhausted-retry monitoring.
+5. Compare dashboard metrics with direct SQL queries against source tables.
+6. Verify organization-level isolation and database relationships.
+7. Record reproducible test cases with expected and actual results.
+8. Review security and deployment requirements before any production use.
+
+---
+
+## 13. Security Considerations
+
+Before publishing workflow exports, SQL files, screenshots or configuration examples:
+
+- Remove API keys and credentials.
+- Remove Telegram bot tokens.
+- Remove database connection strings.
+- Exclude `.env` files.
+- Sanitize private chat identifiers and personal information.
+- Use synthetic test records in public demonstrations.
+- Avoid publishing sensitive internal configuration.
+
+Public project documentation should demonstrate the system's engineering design without exposing credentials or private operational data.
+
+---
 
 ## Summary
 
-CENDARA demonstrates a hybrid AI automation approach: use AI to interpret incoming enquiries, deterministic rules to make qualification decisions, PostgreSQL to preserve operational state, and controlled recovery mechanisms to support reliability.
+CENDARA combines AI-assisted information extraction, deterministic business qualification, PostgreSQL-backed persistence and controlled notification recovery.
 
-Its development emphasizes not only the successful workflow path but also the importance of traceability, testing, failure handling, and accurate documentation of limitations.
+Its engineering approach emphasizes separating AI interpretation from business decisions, maintaining traceable processing state, protecting against duplicate records, and making failures observable.
+
+The project demonstrates that reliable automation involves more than connecting services together. It requires clear system boundaries, database integrity, explicit state management, testing and honest documentation of limitations.
